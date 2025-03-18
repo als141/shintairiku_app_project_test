@@ -2,6 +2,9 @@ import { LineContentRequest, ScrapedContent, LineContentResponse } from '@/types
 import { apiClient } from './apiClient';
 import axios, { AxiosError } from 'axios';
 
+// デバッグフラグ - APIリクエストの詳細をログに出力
+const DEBUG_API = true;
+
 /**
  * APIサーバーの状態をチェック
  */
@@ -33,13 +36,18 @@ export async function scrapeBlogContent(url: string): Promise<ScrapedContent> {
       throw new Error('有効なURLを入力してください');
     }
     
+    // リクエストをデバッグ出力
+    if (DEBUG_API) {
+      console.log(`🔍 Scraping request data:`, { url });
+    }
+    
     return await apiClient.post<ScrapedContent>('/api/scrape-blog', { url: url });
   } catch (error: unknown) {
     console.error('Blog scraping failed:', error);
     
     // エラーレスポンスの詳細をログ出力（デバッグ用）
     if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
+      const axiosError = error as AxiosError<any>;
       if (axiosError.response) {
         console.error('Error response data:', axiosError.response.data);
         console.error('Error response status:', axiosError.response.status);
@@ -62,13 +70,51 @@ export async function generateLineContent(
   useWebSearch: boolean = true
 ): Promise<LineContentResponse> {
   try {
-    return await apiClient.post<LineContentResponse>('/api/generate-line-content', {
+    // リクエストデータの作成
+    const requestData = {
       ...request,
       selected_images: selectedImages,
       use_web_search: useWebSearch
-    });
+    };
+    
+    // リクエストをデバッグ出力
+    if (DEBUG_API) {
+      console.log(`🔍 Generation request data:`, {
+        ...requestData,
+        // 表示を簡略化
+        selected_images: `${selectedImages.length}枚の画像`,
+        content_preview: request.blog_url.substring(0, 30) + '...'
+      });
+    }
+    
+    // APIリクエストを送信
+    const response = await apiClient.post<LineContentResponse>('/api/generate-line-content', requestData);
+    return response;
   } catch (error: unknown) {
     console.error('Content generation failed:', error);
+    
+    // Axiosエラーの詳細情報を表示
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError<any>;
+      
+      if (axiosError.response) {
+        const statusCode = axiosError.response.status;
+        const responseData = axiosError.response.data;
+        
+        console.error(`📛 API Error (${statusCode}):`, responseData);
+        
+        // 422エラーの場合は特に詳細情報を出力
+        if (statusCode === 422) {
+          console.error('💡 バリデーションエラー。リクエストデータの形式を確認してください。');
+          console.error('📤 送信したデータ:', {
+            ...request,
+            selected_images: selectedImages,
+            use_web_search: useWebSearch
+          });
+        }
+      }
+    }
+    
     throw formatError(error, 'LINE配信記事の生成に失敗しました');
   }
 }

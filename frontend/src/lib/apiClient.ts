@@ -1,13 +1,14 @@
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 
-// APIのベースURL - 環境変数またはポート8000（エラーログにあるポート8001ではなく8000に修正）
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001';
+// APIのベースURL - 環境変数またはポート8000
+// ポートをハードコーディング（バックエンドが8000番で起動することを想定）
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 // URLを表示（デバッグ用）
-console.log(`API_BASE_URL: ${API_BASE_URL}`);
+console.log(`📡 API Server: ${API_BASE_URL}`);
 
 // リトライ設定
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000; // ms
 
 /**
@@ -32,6 +33,15 @@ class ApiClient {
       (config) => {
         // リクエスト前の処理
         console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url} to ${config.baseURL}`);
+        // JSON形式でリクエストデータを表示
+        if (config.data && Object.keys(config.data).length > 0) {
+          const simpleData = { ...config.data };
+          // 大きなフィールドは省略
+          if (simpleData.content && typeof simpleData.content === 'string' && simpleData.content.length > 100) {
+            simpleData.content = simpleData.content.substring(0, 100) + '...';
+          }
+          console.log(`📦 Request data:`, simpleData);
+        }
         return config;
       },
       (error) => {
@@ -171,6 +181,7 @@ class ApiClient {
         console.error('リクエストがタイムアウトしました。サーバーが応答していないか、ネットワーク接続を確認してください。');
       } else if (!axiosError.response) {
         console.error('サーバーに接続できませんでした。バックエンドが起動しているか確認してください。');
+        console.error(`接続先: ${API_BASE_URL}`);
       }
     } else {
       // その他のエラー
@@ -186,7 +197,7 @@ class ApiClient {
       return await this.get<{ status: string }>('/');
     } catch (error) {
       console.error('APIサーバーに接続できません:', error);
-      throw new Error('APIサーバーに接続できません。バックエンドサーバーが起動しているか確認してください。');
+      throw new Error(`APIサーバー(${API_BASE_URL})に接続できません。バックエンドサーバーが起動しているか確認してください。`);
     }
   }
 }
