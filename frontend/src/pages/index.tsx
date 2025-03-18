@@ -25,6 +25,9 @@ export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
   
+  // フォームデータを保持する状態を追加
+  const [formData, setFormData] = useState<LineContentRequest | null>(null);
+  
   useEffect(() => {
     setIsClient(true);
     
@@ -54,7 +57,7 @@ export default function Home() {
   });
 
   const [activeStep, setActiveStep] = useState(0);
-  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success'
@@ -76,6 +79,9 @@ export default function Home() {
 
   const handleFormSubmit = async (data: LineContentRequest, useWebSearch: boolean) => {
     setState({ ...state, isLoading: true, error: null });
+    
+    // フォームデータを保存
+    setFormData(data);
 
     try {
       // API接続確認
@@ -129,21 +135,21 @@ export default function Home() {
     });
   };
 
-  const handleGenerateContent = async (formData: LineContentRequest) => {
+  const handleGenerateContent = async () => {
+    // フォームデータが存在することを確認
+    if (!formData) {
+      setNotification({
+        open: true,
+        message: 'フォームデータが見つかりません。最初からやり直してください。',
+        severity: 'error'
+      });
+      setActiveStep(0);
+      return;
+    }
+    
     setState({ ...state, isLoading: true, error: null });
 
     try {
-      // ダミーURL警告（サンプル画面での画像エラー対策）
-      if (formData.blog_url === 'https://example.com/blog' || formData.blog_url === 'https://example.com') {
-        setNotification({
-          open: true,
-          message: 'サンプルURLではなく、実際のブログURLを入力してください',
-          severity: 'warning'
-        });
-        setState({ ...state, isLoading: false });
-        return;
-      }
-
       // LINE配信記事を生成（Web検索機能と複数画像を設定に応じて使用）
       const response = await generateLineContent(
         formData, 
@@ -206,32 +212,8 @@ export default function Home() {
 
   const handleNext = () => {
     if (activeStep === 1) {
-      // 画像選択ステップから生成ステップへ
-      if (state.scrapedContent) {
-        // ここでフォームデータを再度取得する必要がある（実際の実装ではフォームデータを保持する）
-        const dummyFormData: LineContentRequest = {
-          company_name: '株式会社サンプル',
-          company_url: 'https://example.com',
-          blog_url: state.scrapedContent.images.length > 0 
-            ? state.scrapedContent.images[0].replace(/\/[^\/]+$/, '') // 画像URLからドメインを抽出
-            : 'https://example.com/blog',
-          redirect_text: '詳しく知りたい方は、下のリンクor画像をタップ👇✨',
-          bracket_type: '【】',
-          honorific: '様',
-          child_honorific: 'お子様',
-          add_emotional_intro: true,
-          writing_style: 'カジュアル',
-          line_break_style: '読みやすさ重視',
-          content_length: '200文字前後',
-          date_format: 'MM月DD日(ddd), HH:MM',
-          bullet_point: '🟧',
-          emoji_types: '🏡✨👇🎉😊💁‍♂️🎁🌱🌿',
-          emoji_count: '4~5',
-          greeting_text: '{name}さま　こんばんは！'
-        };
-        
-        handleGenerateContent(dummyFormData);
-      }
+      // 画像選択ステップから生成ステップへ - 自動的に記事生成を開始
+      handleGenerateContent();
     } else if (activeStep === 2 && state.selectedOption) {
       // コンテンツ選択ステップから確認ステップへ
       handleConfirmContent();
@@ -253,6 +235,7 @@ export default function Home() {
       generatedOptions: [],
       selectedOption: null
     });
+    setFormData(null);
   };
 
   // サーバー側レンダリング時のフォールバック表示
@@ -358,10 +341,18 @@ export default function Home() {
             <Button 
               variant="contained" 
               onClick={handleNext}
+              disabled={state.isLoading}
             >
-              {state.selectedImages.length > 0 
-                ? `${state.selectedImages.length}枚の画像を選択して次へ` 
-                : '画像なしで次へ'}
+              {state.isLoading ? (
+                <>
+                  <CircularProgress size={24} sx={{ mr: 1 }} />
+                  生成中...
+                </>
+              ) : (
+                state.selectedImages.length > 0 
+                  ? `${state.selectedImages.length}枚の画像を選択して次へ` 
+                  : '画像なしで次へ'
+              )}
             </Button>
           </Box>
         </ClientOnlyWrapper>
